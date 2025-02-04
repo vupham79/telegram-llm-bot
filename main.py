@@ -1,9 +1,9 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from pydantic import BaseModel
 from openai import OpenAI
 from dotenv import load_dotenv
 import os
-
+import httpx
 load_dotenv()
 
 app = FastAPI()
@@ -13,6 +13,9 @@ openai = OpenAI(
     api_key=os.getenv("OPENROUTER_API_KEY"),
 )
 
+client = httpx.AsyncClient()
+TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+BASE_URL = f"https://api.telegram.org/bot{TOKEN}"
 
 @app.get("/health")
 def healthcheck():
@@ -36,3 +39,13 @@ def post_message(request: MessageRequest):
     )
 
     return completion.choices[0].message
+
+@app.post("/webhook/")
+async def webhook(req: Request):
+    data = await req.json()
+    chat_id = data['message']['chat']['id']
+    text = data['message']['text']
+
+    await client.get(f"{BASE_URL}/sendMessage?chat_id={chat_id}&text={text}")
+
+    return data
