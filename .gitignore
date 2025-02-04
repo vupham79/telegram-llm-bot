@@ -1,0 +1,52 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.python-version
+
+# Virtual Environment
+.venv/
+venv/
+
+# Environment files
+.env
+.env.*
+.env.local
+
+# Dependency directories
+dist/
+build/
+*.egg-info/
+*.egg
+
+# Editor directories and files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Local development
+settings/local.py
+
+# Logs and databases
+*.log
+*.sqlite
+
+# macOS
+.DS_Store
+
+# Testing
+.coverage
+htmlcov/
+.pytest_cache/
+
+# Jupyter Notebook
+.ipynb_checkpoints/
+
+# Windows
+Thumbs.db
+
+# Caches
+.mypy_cache/
+
