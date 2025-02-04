@@ -58,6 +58,9 @@ async def webhook(req: Request):
         ]
     )
 
+    print("Question: ", text)
+    print("Answer: ", completion.choices[0])
+
     await client.get(f"{BASE_URL}/sendMessage?chat_id={chat_id}&text={completion.choices[0].message.content}")
 
     return data
