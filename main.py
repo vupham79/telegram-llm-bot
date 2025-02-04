@@ -17,6 +17,7 @@ client = httpx.AsyncClient()
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 BASE_URL = f"https://api.telegram.org/bot{TOKEN}"
 
+
 @app.get("/health")
 def healthcheck():
     return {"status": "healthy"}
@@ -27,7 +28,7 @@ class MessageRequest(BaseModel):
 
 
 @app.post("/message")
-def post_message(request: MessageRequest):
+async def post_message(request: MessageRequest):
     completion = openai.chat.completions.create(
         model="deepseek/deepseek-r1-distill-llama-70b:free",
         messages=[
@@ -40,9 +41,10 @@ def post_message(request: MessageRequest):
 
     return completion.choices[0].message
 
+
 @app.post("/webhook/")
-def webhook(req: Request):
-    data = req.json()
+async def webhook(req: Request):
+    data = await req.json()
     chat_id = data['message']['chat']['id']
     text = data['message']['text']
 
@@ -56,6 +58,6 @@ def webhook(req: Request):
         ]
     )
 
-    client.get(f"{BASE_URL}/sendMessage?chat_id={chat_id}&text={completion.choices[0].message.content}")
+    await client.get(f"{BASE_URL}/sendMessage?chat_id={chat_id}&text={completion.choices[0].message.content}")
 
     return data
