@@ -41,11 +41,21 @@ def post_message(request: MessageRequest):
     return completion.choices[0].message
 
 @app.post("/webhook/")
-async def webhook(req: Request):
-    data = await req.json()
+def webhook(req: Request):
+    data = req.json()
     chat_id = data['message']['chat']['id']
     text = data['message']['text']
 
-    await client.get(f"{BASE_URL}/sendMessage?chat_id={chat_id}&text={text}")
+    completion = openai.chat.completions.create(
+        model="deepseek/deepseek-r1-distill-llama-70b:free",
+        messages=[
+            {
+                "role": "user",
+                "content": text
+            }
+        ]
+    )
+
+    client.get(f"{BASE_URL}/sendMessage?chat_id={chat_id}&text={completion.choices[0].message.content}")
 
     return data
