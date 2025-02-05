@@ -51,6 +51,8 @@ async def webhook(req: Request):
     chat_id = data['message']['chat']['id']
     text = data['message']['text']
 
+    print("Event: ", data)
+
     if chat_id in processing_users:
         await client.get(f"{BASE_URL}/sendMessage", params={
             "chat_id": chat_id,
@@ -75,7 +77,7 @@ async def webhook(req: Request):
         ]
     )
 
-    print("Question: ", text)
+    print("Question: ", data['message']['chat'])
     print("Answer: ", completion.choices[0])
 
     await client.get(f"{BASE_URL}/deleteMessage", params={
