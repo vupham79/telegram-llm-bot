@@ -85,7 +85,8 @@ async def webhook(req: Request):
     if completion.choices[0].message.content:
         await client.get(f"{BASE_URL}/sendMessage", params={
             "chat_id": chat_id,
-            "text": completion.choices[0].message.content
+            "text": completion.choices[0].message.content,
+            "parse_mode": "MarkdownV2"
         })
     else:
         await client.get(f"{BASE_URL}/sendMessage", params={
