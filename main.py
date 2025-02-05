@@ -4,6 +4,7 @@ from openai import OpenAI
 from dotenv import load_dotenv
 import os
 import httpx
+
 load_dotenv()
 
 app = FastAPI()
@@ -17,6 +18,7 @@ client = httpx.AsyncClient()
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 BASE_URL = f"https://api.telegram.org/bot{TOKEN}"
 
+processing_users = set()  # Store users currently being processed
 
 @app.get("/health")
 def healthcheck():
@@ -48,8 +50,22 @@ async def webhook(req: Request):
     chat_id = data['message']['chat']['id']
     text = data['message']['text']
 
+    if chat_id in processing_users:
+        await client.get(f"{BASE_URL}/sendMessage", params={
+            "chat_id": chat_id,
+            "text": "⏳ Please wait until I finish your previous request."
+        })
+        return
+
+    processing_users.add(chat_id)
+
+    temp_msg = await client.get(f"{BASE_URL}/sendMessage", params={
+        "chat_id": chat_id,
+        "text": "🧠 Thinking..."
+    })
+
     completion = openai.chat.completions.create(
-        model="deepseek/deepseek-r1-distill-llama-70b:free",
+        model="meta-llama/llama-3.2-11b-vision-instruct:free",
         messages=[
             {
                 "role": "user",
@@ -61,6 +77,20 @@ async def webhook(req: Request):
     print("Question: ", text)
     print("Answer: ", completion.choices[0])
 
-    await client.get(f"{BASE_URL}/sendMessage?chat_id={chat_id}&text={completion.choices[0].message.content}")
+    await client.get(f"{BASE_URL}/deleteMessage", params={
+        "chat_id": chat_id,
+        "message_id": temp_msg.json()['result']['message_id']
+    })
+
+    if completion.choices[0].message.content:
+        await client.get(f"{BASE_URL}/sendMessage", params={
+            "chat_id": chat_id,
+            "text": completion.choices[0].message.content
+        })
+    else:
+        await client.get(f"{BASE_URL}/sendMessage", params={
+            "chat_id": chat_id,
+            "text": "🤦‍♂️ Sorry, I failed to get the answer."
+        })
 
     return data
