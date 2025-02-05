@@ -20,6 +20,7 @@ BASE_URL = f"https://api.telegram.org/bot{TOKEN}"
 
 processing_users = set()  # Store users currently being processed
 
+
 @app.get("/health")
 def healthcheck():
     return {"status": "healthy"}
@@ -86,7 +87,6 @@ async def webhook(req: Request):
         await client.get(f"{BASE_URL}/sendMessage", params={
             "chat_id": chat_id,
             "text": completion.choices[0].message.content,
-            "parse_mode": "MarkdownV2"
         })
     else:
         await client.get(f"{BASE_URL}/sendMessage", params={
