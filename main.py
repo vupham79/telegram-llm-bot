@@ -93,4 +93,6 @@ async def webhook(req: Request):
             "text": "🤦‍♂️ Sorry, I failed to get the answer."
         })
 
+    processing_users.remove(chat_id)
+
     return data
