@@ -60,8 +60,8 @@ async def webhook(req: Request):
     chat_id = chat.get('id')
     username = from_user.get('username')
 
-    if not chat_id or not username:
-        print("Missing required chat_id or username")
+    if not chat_id:
+        print("Missing required chat_id")
         return {"error": "Invalid message format"}
 
     # Check if message contains photo or video
@@ -78,20 +78,25 @@ async def webhook(req: Request):
         and message['entities'][0].get('type') == 'bot_command'
     )
 
+    chat_user = None
+
     try:
         user = supabase.table('users').select(
-            '*').eq('username', username).single().execute().data
-    except IndexError:
-        user = None
+            '*').eq('chat_id', chat_id).single().execute()
+        if user.data:
+            chat_user = user.data
+    except Exception as e:
+        print("Error: ", e)
 
-    if not user:
-        user = supabase.table('users').insert({
+    if not chat_user:
+        chat_user = supabase.table('users').insert({
             'username': username,
+            'chat_id': chat_id,
             'first_name': from_user.get('first_name'),
             'last_name': from_user.get('last_name'),
         }).execute().data[0]
 
-    if user["is_locking"]:
+    if chat_user["is_locking"]:
         await client.get(f"{BASE_URL}/sendMessage", params={
             "chat_id": chat_id,
             "text": "⏳ Please wait until I finish your previous request."
@@ -100,7 +105,7 @@ async def webhook(req: Request):
 
     supabase.table('users').update({
         'is_locking': True
-    }).eq('username', username).execute()
+    }).eq('chat_id', chat_id).execute()
 
     temp_msg = await client.get(f"{BASE_URL}/sendMessage", params={
         "chat_id": chat_id,
@@ -193,7 +198,11 @@ async def webhook(req: Request):
                     }
                 ]
             )
-            answer = getattr(completion, "choices[0].message.content", None)
+            try:
+                answer = completion.choices[0].message.content
+            except (AttributeError, TypeError):
+                answer = None
+
         elif has_video:
             answer = "Video is not supported yet. Please send me a photo instead. 😔"
 
@@ -251,7 +260,10 @@ async def webhook(req: Request):
                 ]
             )
 
-            answer = getattr(completion, "choices[0].message.content", None)
+            try:
+                answer = completion.choices[0].message.content
+            except (AttributeError, TypeError):
+                answer = None
 
     print("Question: ", message)
     print("Answer: ", answer)
@@ -261,48 +273,51 @@ async def webhook(req: Request):
         "message_id": temp_msg.json()['result']['message_id']
     })
 
-    if answer:
-        retries = 5
-        for attempt in range(retries):
-            try:
-                response = await client.get(f"{BASE_URL}/sendMessage", params={
-                    "chat_id": chat_id,
-                    "text": answer,
-                    "parse_mode": "Markdown"
-                })
-                break
-            except Exception as e:
-                if attempt == retries - 1:  # Last attempt
-                    raise  # Re-raise the last exception if all retries failed
-                await asyncio.sleep(1)  # Wait 1 second before retrying
+    try:
+        if answer:
+            retries = 5
+            for attempt in range(retries):
+                try:
+                    response = await client.get(f"{BASE_URL}/sendMessage", params={
+                        "chat_id": chat_id,
+                        "text": answer,
+                        "parse_mode": "Markdown"
+                    })
+                    break
+                except Exception as e:
+                    if attempt == retries - 1:  # Last attempt
+                        raise  # Re-raise the last exception if all retries failed
+                    await asyncio.sleep(1)  # Wait 1 second before retrying
 
-        response_data = response.json()
+            response_data = response.json()
 
-        supabase.table('chats').insert({
-            'text': response_data.get('result', {}).get('text', None),
-            'chat_id': chat_id,
-            'from': response_data.get('result', {}).get('from', {}),
-            'date': response_data.get('result', {}).get('date', None),
-            'message_id': response_data.get('result', {}).get('message_id', None),
-        }).execute()
-    else:
-        response = await client.get(f"{BASE_URL}/sendMessage", params={
-            "chat_id": chat_id,
-            "text": "🤦‍♂️ Sorry, I failed to get the answer."
-        })
+            supabase.table('chats').insert({
+                'text': response_data.get('result', {}).get('text', None),
+                'chat_id': chat_id,
+                'from': response_data.get('result', {}).get('from', {}),
+                'date': response_data.get('result', {}).get('date', None),
+                'message_id': response_data.get('result', {}).get('message_id', None),
+            }).execute()
+        else:
+            response = await client.get(f"{BASE_URL}/sendMessage", params={
+                "chat_id": chat_id,
+                "text": "🤦‍♂️ Sorry, I failed to get the answer."
+            })
 
-        response_data = response.json()
+            response_data = response.json()
 
-        supabase.table('chats').insert({
-            'text': response_data.get('result', {}).get('text', None),
-            'chat_id': chat_id,
-            'from': response_data.get('result', {}).get('from', {}),
-            'date': response_data.get('result', {}).get('date', None),
-            'message_id': response_data.get('result', {}).get('message_id', None),
-        }).execute()
+            supabase.table('chats').insert({
+                'text': response_data.get('result', {}).get('text', None),
+                'chat_id': chat_id,
+                'from': response_data.get('result', {}).get('from', {}),
+                'date': response_data.get('result', {}).get('date', None),
+                'message_id': response_data.get('result', {}).get('message_id', None),
+            }).execute()
+    except Exception as e:
+        print("Error: ", e)
 
     supabase.table('users').update({
         'is_locking': False
-    }).eq('username', username).execute()
+    }).eq('chat_id', chat_id).execute()
 
     return data
