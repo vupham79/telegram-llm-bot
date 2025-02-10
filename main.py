@@ -51,22 +51,30 @@ async def webhook(req: Request):
     data = await req.json()
     print("Event: ", data)
 
-    chat_id = data['message']['chat']['id']
-    username = data['message']['from']['username']
-    
+    # Safely get nested values with default empty dict/string
+    message = data.get('message', {})
+    chat = message.get('chat', {})
+    from_user = message.get('from', {})
+
+    chat_id = chat.get('id')
+    username = from_user.get('username')
+
+    if not chat_id or not username:
+        print("Missing required chat_id or username")
+        return {"error": "Invalid message format"}
+
     # Check if message contains photo or video
-    has_photo = 'photo' in data['message']
-    has_video = 'video' in data['message']
-    
+    has_photo = 'photo' in message
+    has_video = 'video' in message
+
     # Get text or caption
-    text = data['message'].get('text', data['message'].get('caption', ''))
+    text = message.get('text', message.get('caption', ''))
 
     is_command = (
-        'message' in data
-        and 'entities' in data['message']
-        and len(data['message']['entities']) > 0
-        and 'type' in data['message']['entities'][0]
-        and data['message']['entities'][0]['type'] == 'bot_command'
+        'entities' in message
+        and message.get('entities')
+        and len(message['entities']) > 0
+        and message['entities'][0].get('type') == 'bot_command'
     )
 
     try:
@@ -78,8 +86,8 @@ async def webhook(req: Request):
     if not user:
         user = supabase.table('users').insert({
             'username': username,
-            'first_name': data['message']['from']['first_name'],
-            'last_name': data['message']['from']['last_name'],
+            'first_name': from_user.get('first_name'),
+            'last_name': from_user.get('last_name'),
         }).execute().data[0]
 
     if user["is_locking"]:
@@ -106,10 +114,10 @@ async def webhook(req: Request):
     supabase.table('chats').insert({
         'text': text,
         'chat_id': chat_id,
-        'from': data['message']['from'],
-        'entities': data.get('message', {}).get('entities', []),
-        'date': data['message']['date'],
-        'message_id': data['message']['message_id'],
+        'from': from_user,
+        'entities': message.get('entities', []),
+        'date': message.get('date'),
+        'message_id': message.get('message_id'),
     }).execute()
 
     chats = supabase.table('chats').select(
@@ -145,28 +153,28 @@ async def webhook(req: Request):
                         "role": "user",
                         "content": f"""
                             Here are the articles: {articles}
-                            Please summarize the articles in a way that is easy to understand and provide a brief overview of the main points. Put the post link in the summary so I can click it to read the full article.
+                            Provide a brief overview of the main points. Put the post link in the summary so I can click it to read the full article.
                         """
                     }
                 ]
             )
 
-            answer = completion.choices[0].message.content
+            answer = getattr(completion, "choices[0].message.content", None)
     else:
         if has_photo:
             # Get the largest photo (last item in array)
-            photo = data['message']['photo'][-1]
+            photo = message['photo'][-1]
             file_id = photo['file_id']
-            
+
             # Get file path
             file_info = await client.get(f"{BASE_URL}/getFile", params={
                 "file_id": file_id
             })
             file_path = file_info.json()['result']['file_path']
-            
+
             # Get full photo URL
             photo_url = f"https://api.telegram.org/file/bot{TOKEN}/{file_path}"
-            
+
             completion = openai.chat.completions.create(
                 model="meta-llama/llama-3.2-11b-vision-instruct:free",
                 messages=[
@@ -177,13 +185,14 @@ async def webhook(req: Request):
                     {
                         "role": "user",
                         "content": [
-                            {"type": "text", "text": f"Here is the context that you have with me: {context}\n\nPlease analyze this image" + (f" with the following text: {text}" if text else "")},
+                            {"type": "text", "text": f"Here is the chat history: {context}\n\nPlease analyze this image" + (
+                                f" with the following text: {text}" if text else "")},
                             {"type": "image_url", "image_url": photo_url}
                         ]
                     }
                 ]
             )
-            answer = completion.choices[0].message.content
+            answer = getattr(completion, "choices[0].message.content", None)
         elif has_video:
             answer = "Video is not supported yet. Please send me a photo instead. 😔"
 
@@ -191,18 +200,18 @@ async def webhook(req: Request):
             # # Get video file
             # video = data['message']['video']
             # file_id = video['file_id']
-            
+
             # # Get file path
             # file_info = await client.get(f"{BASE_URL}/getFile", params={
             #     "file_id": file_id
             # })
             # file_path = file_info.json()['result']['file_path']
-            
+
             # # Get full video URL
             # video_url = f"https://api.telegram.org/file/bot{TOKEN}/{file_path}"
 
             # print("Video URL: ", video_url)
-            
+
             # completion = openai.chat.completions.create(
             #     model="meta-llama/llama-3.2-11b-vision-instruct:free",
             #     messages=[
@@ -236,14 +245,14 @@ async def webhook(req: Request):
                     },
                     {
                         "role": "user",
-                        "content": f"Here is the context that you have with me: {context}\n\nHere is the question that I'm asking: {text}"
+                        "content": f"Here is the chat history: {context}\n\nHere is the question that I'm asking: {text}"
                     }
                 ]
             )
 
-            answer = completion.choices[0].message.content
+            answer = getattr(completion, "choices[0].message.content", None)
 
-    print("Question: ", data['message']['chat'])
+    print("Question: ", message)
     print("Answer: ", answer)
 
     await client.get(f"{BASE_URL}/deleteMessage", params={
