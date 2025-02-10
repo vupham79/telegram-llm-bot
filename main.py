@@ -165,7 +165,12 @@ async def webhook(req: Request):
                 ]
             )
 
-            answer = getattr(completion, "choices[0].message.content", None)
+            print("Completion: ", completion)
+
+            try:
+                answer = completion.choices[0].message.content
+            except (AttributeError, TypeError):
+                answer = None
     else:
         if has_photo:
             # Get the largest photo (last item in array)
@@ -202,7 +207,6 @@ async def webhook(req: Request):
                 answer = completion.choices[0].message.content
             except (AttributeError, TypeError):
                 answer = None
-
         elif has_video:
             answer = "Video is not supported yet. Please send me a photo instead. 😔"
 
