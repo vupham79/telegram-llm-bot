@@ -1,3 +1,4 @@
+import asyncio
 from fastapi import FastAPI, Request
 from pydantic import BaseModel
 from openai import OpenAI
@@ -261,11 +262,19 @@ async def webhook(req: Request):
     })
 
     if answer:
-        response = await client.get(f"{BASE_URL}/sendMessage", params={
-            "chat_id": chat_id,
-            "text": answer,
-            "parse_mode": "Markdown"
-        })
+        retries = 5
+        for attempt in range(retries):
+            try:
+                response = await client.get(f"{BASE_URL}/sendMessage", params={
+                    "chat_id": chat_id,
+                    "text": answer,
+                    "parse_mode": "Markdown"
+                })
+                break
+            except Exception as e:
+                if attempt == retries - 1:  # Last attempt
+                    raise  # Re-raise the last exception if all retries failed
+                await asyncio.sleep(1)  # Wait 1 second before retrying
 
         response_data = response.json()
 
