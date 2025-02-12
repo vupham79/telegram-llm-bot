@@ -21,6 +21,7 @@ openai = OpenAI(
 client = httpx.AsyncClient()
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 BASE_URL = f"https://api.telegram.org/bot{TOKEN}"
+COINGECKO_BASE_URL = f"https://api.coingecko.com/api/v3"
 
 
 @app.get("/health")
@@ -325,3 +326,23 @@ async def webhook(req: Request):
     }).eq('chat_id', chat_id).execute()
 
     return data
+
+
+@app.get("/token-price/{token_id}")
+async def get_token_price(token_id: str):
+
+    coingecko_api_key = os.getenv("COINGECKO_API_KEY")
+    try:
+        response = await client.get(f"{COINGECKO_BASE_URL}/simple/price", headers={
+            "accept": "application/json",
+            "x-cg-demo-api-key": coingecko_api_key
+        },
+        params={
+            "ids": token_id,
+            "vs_currencies": "usd"
+        })
+        response.raise_for_status()
+        response_json = response.json()
+        return { "data": response_json, "status": "success"}
+    except client.exceptions.RequestException as e:
+        return {"error": f"Failed to fetch price data: {str(e)}", "status": "error"}
